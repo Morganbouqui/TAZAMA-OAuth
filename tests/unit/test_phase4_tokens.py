@@ -1,4 +1,6 @@
-import base64,json,time
+import base64,json
+from datetime import datetime,timezone
+import pytest
 from tazama_oauth.tokens.parser import classify,decode
 from tazama_oauth.tokens.models import TokenType
 from tazama_oauth.tokens.claims import analyze_time,validate_claims,safe_claims
@@ -23,6 +25,17 @@ def test_time_claims_and_leeway():
  assert analyze_time({'nbf':1100},now)['nbf']=='NOT_YET_VALID'
  assert analyze_time({'iat':1100},now)['iat']=='IAT_IN_FUTURE'
  assert analyze_time({'exp':995},now,leeway=10)['expiration']=='NOT_EXPIRED'
+def test_datetime_and_float_now_inputs():
+ dt=datetime.fromtimestamp(1000,tz=timezone.utc)
+ assert analyze_time({'exp':1001},dt)['expiration']=='NOT_EXPIRED'
+ assert analyze_time({'exp':1001},1000.5)['expiration']=='NOT_EXPIRED'
+def test_invalid_time_inputs_fail_safely():
+ with pytest.raises(ValueError,match='now must'): analyze_time({'exp':1100},'1000')
+ with pytest.raises(ValueError,match='timezone-aware'): analyze_time({'exp':1100},datetime(1970,1,1))
+ for claim in ('exp','iat','nbf'):
+  with pytest.raises(ValueError,match='NumericDate'): analyze_time({claim:'bad'},1000)
+ r=validate_claims({'exp':'bad'},audience='a',now=1000);assert r['expiration']=='INVALID' and 'time_error' in r
+ assert validate_claims({'aud':{'unexpected':'type'}},audience='a',now=1000)['audience']=='INVALID'
 def test_expected_claims():
  c={'iss':'i','aud':['a','b'],'azp':'client','nonce':'n','exp':2000,'iat':900,'nbf':800}
  r=validate_claims(c,'i','a','n','client',now=1000);assert all(r[x]=='VALID' for x in ['issuer','audience','azp','nonce','expiration','iat','nbf'])

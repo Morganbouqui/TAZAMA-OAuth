@@ -1,6 +1,6 @@
 import hashlib,json,re
 from urllib.parse import urlsplit,urlunsplit,parse_qsl,urlencode
-SECRET_KEYS={"access_token","refresh_token","id_token","code","client_secret","password","api_key","apikey","token","authorization","cookie","set-cookie"}
+SECRET_KEYS={"access_token","refresh_token","id_token","code","client_secret","password","api_key","apikey","token","authorization","cookie","set-cookie","state","nonce"}
 def fingerprint(value:str)->str: return "SHA256:"+hashlib.sha256(value.encode()).hexdigest()
 def _secret(value:str)->dict: return {"value":"[REDACTED]","fingerprint":fingerprint(value)}
 def redact_url(url:str):
@@ -26,8 +26,6 @@ def redact_body(body,content_type:str=""):
         try:return redact_mapping(json.loads(s))
         except json.JSONDecodeError:return s
     if "x-www-form-urlencoded" in content_type:
-        from urllib.parse import parse_qsl
         return {k:(_secret(v) if k.lower() in SECRET_KEYS else v) for k,v in parse_qsl(s,keep_blank_values=True)}
-    # Conservative text fallback for obvious key=value secrets.
     for key in SECRET_KEYS: s=re.sub(rf"(?i)({re.escape(key)}\s*[=:]\s*)([^&\s]+)",rf"\1[REDACTED]",s)
     return s

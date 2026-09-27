@@ -27,6 +27,14 @@ async def test_out_of_scope_redirect_recorded_not_followed():
  async def handler(req): seen.append(str(req.url)); return httpx.Response(302,headers={"Location":"https://outside.test/secret"})
  p=ScopePolicy([ScopePolicy.parse_rule("inside.test")]); t=ControlledTransport(p,transport=httpx.MockTransport(handler),rate_per_second=10000)
  r=await t.request("GET","https://inside.test/start"); assert len(seen)==1; assert r.status==302; assert r.redirect_chain[0].scope_allowed is False; assert r.redirect_chain[0].followed is False; assert "outside.test" in r.redirect_chain[0].location
+@pytest.mark.asyncio
+async def test_redirect_loop_is_bounded_and_structured():
+ seen=[]
+ async def handler(req):
+  seen.append(str(req.url)); return httpx.Response(302,headers={"Location":"/loop"})
+ p=ScopePolicy([ScopePolicy.parse_rule("inside.test")]); t=ControlledTransport(p,transport=httpx.MockTransport(handler),rate_per_second=10000,max_redirects=2)
+ with pytest.raises(httpx.TooManyRedirects,match="redirect limit exceeded"): await t.request("GET","https://inside.test/loop")
+ assert len(seen)==3
 
 def test_persisted_evidence_has_no_raw_secrets(tmp_path):
  rec=EvidenceRecord("inside.test","test",{"url":"https://inside.test/?access_token=URLSECRET","headers":{"Authorization":"Bearer HEADERSECRET","Cookie":"sid=COOKIESECRET"},"body":"client_secret=FORMSECRET&x=ok","content_type":"application/x-www-form-urlencoded"},{"headers":{"Set-Cookie":"sid=RESPONSESECRET"},"body":{"access_token":"JSONSECRET"},"content_type":"application/json"})

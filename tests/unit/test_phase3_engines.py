@@ -21,6 +21,14 @@ def test_differential_deterministic():
  d=compare(b,r2); assert d.status_changed and d.location_changed and d.redirect_chain_changed and d.body_hash_changed and d.body_length_delta==1
  assert 'SECRET' not in str(b.as_dict())
 
+def test_baseline_serialization_redacts_sensitive_oauth_query_values():
+ secrets={'state':'STATESECRET','nonce':'NONCESECRET','code':'CODESECRET','access_token':'ACCESSSECRET','refresh_token':'REFRESHSECRET','id_token':'IDSECRET','client_secret':'CLIENTSECRET'}
+ url='https://app.test/a?'+'&'.join(f'{k}={v}' for k,v in secrets.items())+'&client_id=public-client'
+ b=create_baseline('GET',url,{},None,HTTPResult('https://app.test/a',200,{},'ok',[]))
+ serialized=str(b.as_dict())
+ for secret in secrets.values(): assert secret not in serialized
+ assert 'client_id' in serialized and 'public-client' in serialized and '[REDACTED]' in serialized
+
 def test_confidence_transitions():
  assert classify(observed=True)==EvidenceState.OBSERVED
  assert classify(suspicious_acceptance=True)==EvidenceState.POTENTIAL
