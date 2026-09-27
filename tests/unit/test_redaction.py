@@ -1,7 +1,16 @@
 import json
+from urllib.parse import parse_qs,urlsplit
 from tazama_oauth.evidence.redaction import *
+
 def test_url_query_redaction():
- s=redact_url("https://x.test/cb?code=secret123&state=ok"); assert "secret123" not in s and "state=ok" in s
+ redacted=redact_url("https://x.test/cb?code=secret123&state=state-secret&nonce=nonce-secret")
+ assert "secret123" not in redacted
+ assert "state-secret" not in redacted
+ assert "nonce-secret" not in redacted
+ query=parse_qs(urlsplit(redacted).query,keep_blank_values=True)
+ assert query["code"]==["[REDACTED]"]
+ assert query["state"]==["[REDACTED]"]
+ assert query["nonce"]==["[REDACTED]"]
 
 def test_header_redaction():
  d=redact_headers({"Authorization":"Bearer secret123","Cookie":"sid=secret456","X":"ok"}); s=json.dumps(d); assert "secret123" not in s and "secret456" not in s and "ok" in s
